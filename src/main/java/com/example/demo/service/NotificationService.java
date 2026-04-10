@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.model.Order;
+import com.example.demo.avro.OrderCreated;
 import com.example.demo.model.ProcessedEvent;
 import com.example.demo.repository.ProcessEventRepo;
 import jakarta.transaction.Transactional;
@@ -16,14 +16,15 @@ public class NotificationService {
 
     @KafkaListener(topics = "order-topic", groupId = "notification-service")
     @Transactional
-    public void consume(Order order){
-        if (processEventRepo.existsById(order.getOrderId())){
+    public void consume(OrderCreated order){
+        String orderId = order.getOrderId();
+        if (processEventRepo.existsById(orderId)){
             return;
         }
-        if (order.getProduct().equals("FAIL")) {
+        if ("FAIL".equals(order.getProduct())) {
             throw new RuntimeException("Simulated failure");
         }
-        System.out.println("order is picked from kafka with id " + order.getOrderId());
-        processEventRepo.save(new ProcessedEvent(order.getOrderId()));
+        System.out.println("order is picked from kafka with id " + orderId);
+        processEventRepo.save(new ProcessedEvent(orderId));
     }
 }

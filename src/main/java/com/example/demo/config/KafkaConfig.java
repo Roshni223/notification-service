@@ -1,11 +1,12 @@
 package com.example.demo.config;
 
-import com.example.demo.model.Order;
+import com.example.demo.avro.OrderCreated;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.util.backoff.FixedBackOff;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 
@@ -13,38 +14,28 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 public class KafkaConfig {
 
     @Bean
-    public ConcurrentKafkaListenerContainerFactory<String, Order> kafkaListenerContainerFactory(
-            ConsumerFactory<String, Order> consumerFactory) {
+    public ConcurrentKafkaListenerContainerFactory<String, OrderCreated> kafkaListenerContainerFactory(
+            ConsumerFactory<String, OrderCreated> consumerFactory,
+            DefaultErrorHandler errorHandler) {
 
-        ConcurrentKafkaListenerContainerFactory<String, Order> factory =
+        ConcurrentKafkaListenerContainerFactory<String, OrderCreated> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
 
         factory.setConsumerFactory(consumerFactory);
-
-        // Retry 3 times with 2 sec gap
-        FixedBackOff backOff = new FixedBackOff(2000L, 3);
-
-        factory.setCommonErrorHandler(new DefaultErrorHandler(
-                (record, exception) -> {
-                    // Send to DLQ manually
-                    System.out.println("Sending to DLQ: " + record.value());
-                },
-                backOff
-        ));
+        factory.setCommonErrorHandler(errorHandler);
 
         return factory;
     }
 
     @Bean
-    public DefaultErrorHandler errorHandler(KafkaTemplate<String, Order> kafkaTemplate) {
-
+    public DefaultErrorHandler errorHandler(KafkaTemplate<String, OrderCreated> kafkaTemplate) {
         FixedBackOff backOff = new FixedBackOff(2000L, 3);
-
-        return new DefaultErrorHandler(
-                (record, exception) -> {
-                    kafkaTemplate.send("order-dlq", (Order) record.value());
-                },
-                backOff
+        DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(
+                kafkaTemplate,
+                (record, exception) -> record.topic().equals("order-dlq")
+                        ? record.topicPartition()
+                        : new org.apache.kafka.common.TopicPartition("order-dlq", record.partition())
         );
+        return new DefaultErrorHandler(recoverer, backOff);
     }
 }
