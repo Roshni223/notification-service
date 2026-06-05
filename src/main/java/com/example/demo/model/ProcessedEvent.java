@@ -13,5 +13,5 @@ import lombok.NoArgsConstructor;
 public class ProcessedEvent {
 
     @Id
-    private String eventId;//adding comment
+    private String eventId;
 }
