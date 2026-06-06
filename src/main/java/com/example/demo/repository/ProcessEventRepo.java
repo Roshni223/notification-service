@@ -7,3 +7,4 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ProcessEventRepo extends JpaRepository<ProcessedEvent, String> {
 }
+//practicin the git
